@@ -1,115 +1,72 @@
-# ╔═════════════════════════════════════════════════════╗
-# ║                       SETUP                         ║
-# ╚═════════════════════════════════════════════════════╝
-  # GLOBAL
-  ARG APP_UID=1000 \
-      APP_GID=1000 \
-      BUILD_SRC=https://github.com/11notes/fork-py-kms.git \
-      BUILD_ROOT=/git/fork-py-kms
+# Saving 11notes depencies
+FROM alpine/git AS build
+ARG APP_VERSION=next
+ARG BUILD_SRC=https://github.com/11notes/fork-py-kms.git
+ARG BUILD_ROOT=/git/fork-py-kms
 
-  # :: FOREIGN IMAGES
-  FROM 11notes/util AS util
+RUN set -ex; \
+    git clone --branch "${APP_VERSION}" --depth 1 "${BUILD_SRC}" "${BUILD_ROOT}"
 
-# ╔═════════════════════════════════════════════════════╗
-# ║                       BUILD                         ║
-# ╚═════════════════════════════════════════════════════╝
-  # :: PY-KMS
-  FROM alpine/git AS build
-  ARG APP_VERSION \
-      BUILD_SRC \
-      BUILD_ROOT
+# Using official python image
+FROM python:3.13-slim
 
-  RUN set -ex; \
-    git clone ${BUILD_SRC} -b next; \
-    cd ${BUILD_ROOT}; \
-    git checkout v${APP_VERSION};
+# default arguments
+ARG APP_IMAGE
+ARG APP_NAME
+ARG APP_VERSION
+ARG APP_ROOT=/app
+ARG APP_UID=1000
+ARG APP_GID=1000
 
-  RUN set -ex; \
-    cd ${BUILD_ROOT}; \
-    cp -R ${BUILD_ROOT}/docker/docker-py3-kms-minimal/requirements.txt ${BUILD_ROOT}/py-kms/requirements.txt; \
-    cp -R ${BUILD_ROOT}/docker/docker-py3-kms/requirements.txt ${BUILD_ROOT}/py-kms/requirements.gui.txt;
+# environment
+ENV APP_IMAGE=${APP_IMAGE} \
+    APP_NAME=${APP_NAME} \
+    APP_VERSION=${APP_VERSION} \
+    APP_ROOT=${APP_ROOT} \
+    KMS_ADDRESS=:: \
+    KMS_PORT=1688 \
+    KMS_LOCALE=1033 \
+    KMS_ACTIVATIONINTERVAL=120 \
+    KMS_RENEWALINTERVAL=259200 \
+    PIP_ROOT_USER_ACTION=ignore \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
-# ╔═════════════════════════════════════════════════════╗
-# ║                       IMAGE                         ║
-# ╚═════════════════════════════════════════════════════╝
-  # :: HEADER
-  FROM 11notes/python:3.13
+# install system deps
+RUN set -ex; \
+    apt-get update && apt-get install -y --no-install-recommends \
+      tini \
+      netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
 
-  # :: default arguments
-    ARG TARGETPLATFORM \
-        TARGETOS \
-        TARGETARCH \
-        TARGETVARIANT \
-        APP_IMAGE \
-        APP_NAME \
-        APP_VERSION \
-        APP_ROOT \
-        APP_UID \
-        APP_GID \
-        APP_NO_CACHE
+# copy sources from build
+COPY --from=build /git/fork-py-kms/py-kms /opt/py-kms
 
-  # :: default python image
-    ARG PIP_ROOT_USER_ACTION=ignore \
-        PIP_BREAK_SYSTEM_PACKAGES=1 \
-        PIP_DISABLE_PIP_VERSION_CHECK=1 \
-        PIP_NO_CACHE_DIR=1
+# :: install python dependencies
+WORKDIR /opt/py-kms
+RUN set -ex; \
+    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi; \
+    pip install pytz
 
-  # :: image specific arguments
-    ARG BUILD_ROOT
+# create app directories and user
+RUN set -ex; \
+    mkdir -p ${APP_ROOT}/var; \
+    groupadd -g ${APP_GID} kmsgroup; \
+    useradd -u ${APP_UID} -g ${APP_GID} -d ${APP_ROOT} -s /bin/sh kmsuser; \
+    chown -R kmsuser:kmsgroup ${APP_ROOT} /opt/py-kms
 
-  # :: default environment
-    ENV APP_IMAGE=${APP_IMAGE} \
-        APP_NAME=${APP_NAME} \
-        APP_VERSION=${APP_VERSION} \
-        APP_ROOT=${APP_ROOT}
+# copy root filesystem
+COPY ./rootfs /
+RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chown kmsuser:kmsgroup /usr/local/bin/entrypoint.sh
 
-  # :: app specific variables
-    ENV KMS_ADDRESS=:: \
-		KMS_PORT=1688 \
-        KMS_LOCALE=1033 \
-        KMS_ACTIVATIONINTERVAL=120 \
-        KMS_RENEWALINTERVAL=259200
+# volumes and healthcheck
+VOLUME ["${APP_ROOT}/var"]
 
-  # :: multi-stage
-    COPY --from=util /usr/local/bin /usr/local/bin
-    COPY --from=build ${BUILD_ROOT}/py-kms /opt/py-kms
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD nc -z localhost 1688 || exit 1
 
-# :: RUN
-  USER root
-
-  # :: install dependencies
-    RUN set -ex; \
-      apk --no-cache --update --virtual .build add \
-        py3-pip;
-
-  # :: install and update application
-    RUN set -ex; \
-      mkdir -p ${APP_ROOT}/var; \
-      pip3 install -r /opt/py-kms/requirements.txt; \
-      pip3 install pytz; \
-      pip3 list -o | sed 's/pip.*//' | grep . | cut -f1 -d' ' | tr " " "\n" | awk '{if(NR>=3)print}' | cut -d' ' -f1 | xargs -n1 pip3 install -U; \
-      apk del --no-network .build; \
-      rm -rf /usr/lib/python3.13/site-packages/pip;
-
-  # :: copy root filesystem and set correct permissions
-    COPY ./rootfs /
-    RUN set -ex; \
-      chmod +x -R /usr/local/bin; \
-      chown -R ${APP_UID}:${APP_GID} \
-        ${APP_ROOT} \
-        /opt/py-kms;
-
-  # :: enable unraid support
-    RUN set -ex; \
-      eleven unraid
-
-# :: PERSISTENT DATA
-  VOLUME ["${APP_ROOT}/var"]
-
-# :: HEALTH
-  HEALTHCHECK --interval=5s --timeout=2s --start-interval=5s \
-    CMD ["/usr/bin/nc", "-z", "localhost", "1688"]
-
-# :: EXECUTE
-  USER ${APP_UID}:${APP_GID}
-  ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+# entrypoint
+USER kmsuser
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
