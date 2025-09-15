@@ -1,4 +1,4 @@
-#!/bin/ash
+#!/bin/sh
   if [ -z "${1}" ]; then
 
     if [ ! -z "${DEBUG}" ]; then
