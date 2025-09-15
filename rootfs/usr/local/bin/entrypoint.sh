@@ -11,8 +11,8 @@
     cd /opt/py-kms
     set -- "python3" \
       pykms_Server.py \
-      :: \
-      1688 \
+      ${KMS_ADDRESS} \
+      ${KMS_PORT} \
       -l ${KMS_LOCALE} \
       -a ${KMS_ACTIVATIONINTERVAL} \
       -r ${KMS_RENEWALINTERVAL} \
