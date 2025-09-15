@@ -65,7 +65,7 @@
 
   # :: app specific variables
     ENV KMS_ADDRESS=:: \
-		    KMS_PORT=1688 \
+		KMS_PORT=1688 \
         KMS_LOCALE=1033 \
         KMS_ACTIVATIONINTERVAL=120 \
         KMS_RENEWALINTERVAL=259200
