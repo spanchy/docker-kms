@@ -108,6 +108,8 @@ slmgr /ato
 | --- | --- | --- |
 | `TZ` | [Time Zone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) | |
 | `DEBUG` | Will activate debug option for container image and app (if available) | |
+| `KMS_ADDRESS` | This address will be to use for incoming request | :: |
+| `KMS_PORT` | This port will be to use for incoming reques | 1688 |
 | `KMS_LOCALE` | see Microsoft LICD specification | 1033 (en-US) |
 | `KMS_ACTIVATIONINTERVAL` | Retry unsuccessful after N minutes | 120 (2 hours) |
 | `KMS_RENEWALINTERVAL` | re-activation after N minutes | 259200 (180 days) |
