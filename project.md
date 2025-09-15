@@ -53,6 +53,8 @@ ${{ content_defaults }}
 | `database` | /kms/var/kms.db | SQlite database holding all client data |
 
 ${{ content_environment }}
+| `KMS_ADDRESS` | This address will be to use for incoming request | :: |
+| `KMS_PORT` | This port will be to use for incoming reques | 1688 |
 | `KMS_LOCALE` | see Microsoft LICD specification | 1033 (en-US) |
 | `KMS_ACTIVATIONINTERVAL` | Retry unsuccessful after N minutes | 120 (2 hours) |
 | `KMS_RENEWALINTERVAL` | re-activation after N minutes | 259200 (180 days) |
